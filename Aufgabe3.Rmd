@@ -1,0 +1,258 @@
+---
+title: "Aufgabe3"
+author: "Max Melchior Lang"
+date: "8/4/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(pammtools)
+library(tidyverse)
+options(pillar.sigfig = 10)
+```
+
+# Aufgabe 3
+
+```{r}
+etf_overview <- readRDS("etf-overview.Rds")
+etf_overview
+```
+
+## a)
+
+```{r}
+etf_overview <- etf_overview %>% 
+  mutate("Investment"= Anteile*Kurs)
+
+ggplot(etf_overview, aes(x= reorder(ETF, -Investment, sum), y= Investment))+
+  geom_col()+
+  guides(x =  guide_axis(angle = 45))+
+  ggtitle("Investments pro ETF in Euro")+
+  xlab("Exchange trade funde (ETF)")+
+  ylab("Investment in Euro")
+```
+
+## b)
+
+```{r, message= FALSE}
+### import_etf function
+###
+### Imports single .csv files containing ETF Data. Refers to the previously read in 
+### etf_overview data frame to get specified ETF ID.
+###
+### Arguments:
+### path: A character vector of length 1: The path to the respected .csv file
+### id: Specified ETF_ID from etf_overview
+### Returns: A data frame. The read in .csv file.
+
+import_etf <- function(path, id){
+  #Input checks
+  if(!(is.character(path) && (length(path)==1))){
+    stop("The path argument has to be a character vector of length 1")
+  }
+  if(!(is.numeric(id) && (length(id)==1))){
+    stop("The id argument has to be a numeric vector of length 1")
+  }
+  
+  data <- read_delim(path, ":",col_names = TRUE, comment= "Stand:")
+  data <- add_column(data, ETF_ID= etf_overview[["ETF_ID"]][id], .before = 1)
+  return(data)
+}
+
+core_msci_world <-  import_etf(
+  path = "data/CoreMSCIWorld.csv",
+  id = 5 )
+
+core_msci_world %>% 
+  select(ETF_ID, ISIN, Name, Kurs)
+
+```
+
+## c)
+```{r, echo=TRUE, results='hide', message=FALSE}
+files <- list.files(path= "data", pattern = ".csv", full.names = TRUE)
+
+# Cleaning files for agrep
+files_name <- str_remove(files, ".csv") %>% 
+  str_remove(., "data/") %>% 
+  str_replace(., "MSCI\\s*(?!$)", "MSCI ") %>% 
+  str_replace(., "SRI$", " SRI") %>%
+  str_replace(., "Stoxx200Small","STOXX Europe Small 200" )
+
+# Matchin IDs
+id_vector <- vector()
+for(i in seq_along(files_name)){
+  id_vector[i] <- agrep(files_name[i], etf_overview[["ETF"]])[1]
+}
+
+etf_data <- map2_df(.x= files, .y= id_vector, .f= ~import_etf(path= .x, id= .y)) %>% 
+  arrange(.$ETF_ID)
+
+
+```
+
+```{r}
+etf_data %>% 
+  head()
+```
+
+## d)
+
+```{r}
+colnames(etf_data) <- str_replace_all(colnames(etf_data), 
+                                      pattern= c("ö"= "oe", "ü"= "ue",
+                                                 "ä"="ae","ß"= "ss", " "= "",
+                                                 "\\("= "", "%"="","\\)"= ""))
+
+colnames(etf_data)
+```
+
+
+
+
+## e)
+```{r}
+ETF_ID_Investment <- etf_overview %>% 
+  select(ETF_ID, Investment) %>% 
+  rename(., InvestmentPerETF = Investment ) #new_name = old_name
+
+# Invested amount per Company for each ETF
+etf_data <- left_join(etf_data, ETF_ID_Investment, by= "ETF_ID") %>% 
+  mutate(InvestmentPerCompany= (Gewichtung/100)*InvestmentPerETF)
+
+
+etf_data <- etf_data %>% 
+  mutate(Investment= (ave(InvestmentPerCompany, ISIN, FUN=sum)))
+
+etf_data %>% 
+  select(ETF_ID, Name, Investment)
+```
+
+## f)
+
+```{r}
+etf_data <- etf_data %>% 
+  replace_na(list(Investment = 0))
+```
+
+
+## g)
+
+```{r}
+distinct_list <- list("ETF_ID"= vector(), "n_ISIN"= vector())
+for(i in 1:length(unique(etf_data$ETF_ID))){
+   distinct_list[[2]][i] <- etf_data %>%
+     dplyr::filter(ETF_ID == i) %>%
+     select(ISIN)%>%
+     n_distinct()
+  
+  distinct_list[[1]][i] <- i
+}
+
+data.frame(distinct_list) %>% 
+  left_join(etf_overview[c("ETF", "ETF_ID")], by= "ETF_ID") %>% 
+  arrange(desc(.$n_ISIN))
+
+```
+
+## h)
+```{r}
+  etf_data %>% 
+  dplyr::filter(nchar(ISIN)==12) %>% 
+  select(ISIN) %>% 
+  duplicated() %>% 
+  any()
+# Duplicated Values are in the dataset
+
+full_isin_etf_data <- etf_data %>% 
+  dplyr::filter(nchar(ISIN)==12)
+
+TotalInvestmentPerStock <- full_isin_etf_data %>% 
+  group_by(ISIN) %>% 
+  summarise("TotalInvestment"= sum(InvestmentPerCompany))
+
+TotalInvestmentPerStock <- aggregate(
+  list("TotalInvestment"=full_isin_etf_data$InvestmentPerCompany),
+  by= list(ISIN= full_isin_etf_data$ISIN),
+  sum)
+
+TotalInvestmentPerStock %>% 
+    arrange(desc(TotalInvestment)) %>% 
+  head()
+
+
+
+left_join(TotalInvestmentPerStock, etf_data[c("Name","ISIN")], by= "ISIN") %>% 
+  arrange(desc(TotalInvestment)) %>%
+  unique() %>% # Unique call because after join duplicated values
+  head()
+
+```
+
+## i)
+```{r}
+
+top_investments_ETF_ID <- etf_data %>% 
+  mutate("Proportion"= InvestmentPerCompany/InvestmentPerETF) %>% 
+  arrange(desc(.$Proportion)) %>% 
+  group_by(ETF_ID) %>% 
+  slice(1:3)
+
+top_investments_ETF_ID %>% 
+  group_by(Standort) %>% 
+  count(Standort) %>% 
+  arrange(desc(.$n)) 
+
+top_investments_ETF_ID %>% 
+  group_by(Sektor) %>% 
+  count(Sektor) %>% 
+  arrange(desc(.$n)) 
+```
+Die USA sind damit in diesen Daten (`top_investments_ETF_ID`) am häufigsten vertreten (`n=10`).
+Der Sektor IT ist mit `n= 11` Beobachtungen am häufigsten in diesen Daten vertreten.
+
+
+
+## j)
+```{r, fig.width= 10,fig.height= 13, warning= FALSE, message=FALSE}
+
+aggregated_etf_data <- etf_data %>% 
+  group_by(Standort, Sektor) %>% 
+  summarise(TotalInvestment= sum(InvestmentPerCompany)) %>% 
+  arrange(desc(TotalInvestment))
+  
+
+aggregated_etf_data[["Standort"]] <- as.factor(aggregated_etf_data[["Standort"]])
+
+
+aggregated_etf_data <-  aggregated_etf_data %>% 
+  group_by(Standort) %>% 
+  mutate(StandortInvest= sum(TotalInvestment, na.rm = TRUE))
+
+
+aggregated_etf_data[["Standort_lumped"]] <- fct_lump(aggregated_etf_data$Standort, 
+                                              n = 10, 
+                                              w = aggregated_etf_data$StandortInvest,
+                                              other_level = "Sonstige")
+
+
+
+  
+
+ggplot(aggregated_etf_data, aes(x= Standort_lumped, y= TotalInvestment))+
+  geom_col()+
+  facet_wrap(~Sektor)+
+  guides(x =  guide_axis(angle = 90))+
+  theme_light()+
+  ggtitle("Investments in each Sector for top 10 invested countries")+
+  xlab("Countries")+
+  ylab("Total Investment in Euro")
+
+```
+
+# Session Info
+```{r}
+sessionInfo()
+```
+

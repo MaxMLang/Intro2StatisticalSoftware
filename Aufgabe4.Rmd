@@ -1,0 +1,45 @@
+---
+title: "Aufgabe4"
+author: "Max Melchior Lang"
+date: "8/4/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(pammtools)
+library(tidyverse)
+options(pillar.sigfig = 10)
+```
+
+
+# Aufgabe 4
+
+```{r}
+umfragen <- readRDS("umfragen.Rds")
+
+umfragen <- umfragen %>% 
+  add_column("n_factors"= 1:8, .before=1) %>% 
+  pivot_longer(!n_factors, names_to = "risk_factor", 
+               values_to = "probability")
+
+legend_labels <- c("Age", "Alcohol Consumption", "Blood Pressure", "BMI",
+                   "Education", "# of Comorbidities", "Sex", "Smooking")
+
+
+ggplot(umfragen, aes(x= n_factors, y= probability, col= risk_factor))+
+  geom_line()+
+  geom_point()+
+  ggtitle("Risk Assesement by Physicians for a heart-attack")+
+  xlab("# Risk Factors")+
+  ylab("Probability of being named by physician")+
+  scale_color_discrete(name= c("Risk Factor"), 
+                       labels= legend_labels)+
+  theme_bw()
+```
+
+# Session Info
+```{r}
+sessionInfo()
+```
+
