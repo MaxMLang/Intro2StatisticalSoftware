@@ -25,6 +25,8 @@ line_solution <- function(x, y) {
 
 }
 
+
+
 ### Calculate prediction
 ###
 ### This function returns the value of the line on the y-axis, given  x and
