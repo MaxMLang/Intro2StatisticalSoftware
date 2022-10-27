@@ -26,13 +26,13 @@ line_solution <- function(x, y) {
 }
 
 ### Calculate prediction
-###
+### 
 ### This function returns the value of the line on the y-axis, given  x and
 ### the intercept and slope of the line.
 ### Arguments:
 ### x: a vector. The x-coordinate of the points.
-### a: A numeric of length 1. The intercept.
-### b: A numeric of length 1. The slope.
+### a: A numeric of length 1. The intercept of the model.
+### b: A numeric of length 1. The slope of the model.
 ### Returns: A vector of same length as x. This are the values of the line at
 ###           x-coordinates provided by vector x.
 line_prediction <- function(x, a, b) {
